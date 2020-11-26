@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import click
+import csv
 
 from utils.configloader import RESOLUTION, FRAMERATE, OUT_DIR, MODEL,  MULTI_CAM, STACK_FRAMES, \
     ANIMALS_NUMBER, STREAMS, STREAMING_SOURCE
@@ -106,6 +107,7 @@ class DeepLabStream:
         self._start_time = None  # time of initialization
         self._data_row = {camera: {} for camera in self.cameras}  # dictionary for creating row of data for each frame
         self._data_output = {}  # dictionary for storing rows for dataframes
+        self._file_output =  self.create_output_file()  #csv file  writer  dictionary that is continuesly updating the output file
         self._stored_frames = {}  # dictionary for storing frames
         self._dlc_running = False  # has DeepLabCut started?
         self._experiment_running = False  # has experiment started?
@@ -260,6 +262,27 @@ class DeepLabStream:
             # puts the frame index in the top-left corner
             cv2.putText(frames[camera], str(index), (1, 15), font, 0.5, (0, 0, 255))
             self._video_files[camera].write(frames[camera])
+    ######################
+    # working with csv file
+    ######################
+
+    def create_output_file(self):
+        output_file_dict = {}
+        """Creates outputfile that will be updated with each frame"""
+        for num, camera in enumerate(self.cameras):
+            print("Creating database for device {}".format(camera))
+            file_name = OUT_DIR + '/CSVDataOutput{}'.format(camera) + '-' + time.strftime('%d%m%Y-%H%M%S') + '.csv'
+            with open(file_name, 'a') as outfile:
+                output_file_dict[camera]= csv.writer(outfile, delimiter = ';')
+
+        return output_file_dict
+
+    def update_output_file(self):
+        """updates output file with new row"""
+        for num, camera in enumerate(self._data_output):
+            data = self._data_output[camera][-1].values
+            self._file_output[camera].writerow(data)
+            print("Database updated")
 
     ######################
     # setting up DLC usage
@@ -392,6 +415,9 @@ class DeepLabStream:
                                         self._experiment_running, self._experiment.get_trial(), self._start_time)
 
                     analysed_frames[camera] = analysed_image
+                    #TODO: mistakes
+                    self.update_output_file()
+
             return analysed_frames, analysis_time
 
     def store_frames(self, camera: str, c_frame, d_map, frame_time: float):
